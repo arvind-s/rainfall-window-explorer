@@ -1,0 +1,4 @@
+# Dependencies for rebuilding the dataset locally (build_dataset.py).
+# Superset of the runtime requirements plus the IMD downloader.
+-r requirements.txt
+imdlib>=0.1.2   # IMD Pune gridded rainfall download
