@@ -11,10 +11,23 @@ BLOCK_COL = "Block"
 DISTRICT_COL = "District"
 STATE_COL = "State"
 
-# the shapefile mixes full state names and 2-letter codes -> normalise for clean grouping
+# the shapefile mixes full names and codes -> normalise (matched case-insensitively)
 STATE_ALIASES = {"AP": "Andhra Pradesh", "KA": "Karnataka", "TN": "Tamil Nadu",
                  "TS": "Telangana", "TG": "Telangana", "OD": "Odisha", "OR": "Odisha",
                  "KL": "Kerala", "MH": "Maharashtra"}
+DISTRICT_ALIASES = {
+    "ASR": "Alluri Sitharama Raju", "VSK": "Alluri Sitharama Raju",
+    "BDR": "Bidar", "BHD": "Bhadradri Kothagudem", "CTT": "Cuttack", "CUT": "Cuttack",
+    "DAV": "Davanagere", "DIN": "Dindigul", "HAV": "Haveri", "MYR": "Mayurbhanj",
+    "SND": "Sangareddy", "VIL": "Villupuram", "VJP": "Vijayapura", "VKR": "Vikarabad",
+    "PRA": "Prakasam", "WGI": "Eluru", "PLK": "Palakkad",
+}
+
+
+def _alias(series, table):
+    """Map codes to full names, matching keys case-insensitively; keep others as-is."""
+    up = {k.upper(): v for k, v in table.items()}
+    return series.astype(str).str.strip().map(lambda v: up.get(v.upper(), v))
 
 
 def load_blocks(shp_path: str, block_col: str = BLOCK_COL,
@@ -37,9 +50,8 @@ def load_blocks(shp_path: str, block_col: str = BLOCK_COL,
     g = g.reset_index(drop=True)
     g["block_id"] = g.index.astype(int)
     g["block"] = g[block_col].astype(str).str.strip()
-    g["district"] = g[district_col].astype(str).str.strip() if district_col in g.columns else ""
-    g["state"] = g[state_col].astype(str).str.strip() if state_col in g.columns else ""
-    g["state"] = g["state"].replace(STATE_ALIASES)   # codes (KA, TN, …) -> full names
+    g["district"] = _alias(g[district_col], DISTRICT_ALIASES) if district_col in g.columns else ""
+    g["state"] = _alias(g[state_col], STATE_ALIASES) if state_col in g.columns else ""
     # make block names UNIQUE (they key all downstream data). First qualify
     # duplicates with their district; if a name is still duplicated (same name +
     # district), append the unique block_id so nothing collapses.
