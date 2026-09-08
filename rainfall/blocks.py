@@ -8,8 +8,13 @@ from shapely.geometry import Point
 from . import gsmap
 
 BLOCK_COL = "Block"
-DISTRICT_COL = "District_x"
-STATE_COL = "State_x"
+DISTRICT_COL = "District"
+STATE_COL = "State"
+
+# the shapefile mixes full state names and 2-letter codes -> normalise for clean grouping
+STATE_ALIASES = {"AP": "Andhra Pradesh", "KA": "Karnataka", "TN": "Tamil Nadu",
+                 "TS": "Telangana", "TG": "Telangana", "OD": "Odisha", "OR": "Odisha",
+                 "KL": "Kerala", "MH": "Maharashtra"}
 
 
 def load_blocks(shp_path: str, block_col: str = BLOCK_COL,
@@ -34,11 +39,18 @@ def load_blocks(shp_path: str, block_col: str = BLOCK_COL,
     g["block"] = g[block_col].astype(str).str.strip()
     g["district"] = g[district_col].astype(str).str.strip() if district_col in g.columns else ""
     g["state"] = g[state_col].astype(str).str.strip() if state_col in g.columns else ""
-    # disambiguate duplicate block names by district (or by id when no district)
+    g["state"] = g["state"].replace(STATE_ALIASES)   # codes (KA, TN, …) -> full names
+    # make block names UNIQUE (they key all downstream data). First qualify
+    # duplicates with their district; if a name is still duplicated (same name +
+    # district), append the unique block_id so nothing collapses.
     dup = g["block"].duplicated(keep=False)
     if dup.any():
-        suffix = g["district"].where(g["district"].astype(bool), g["block_id"].astype(str))
-        g.loc[dup, "block"] = g.loc[dup, "block"] + " (" + suffix[dup].astype(str) + ")"
+        d = g.loc[dup, "district"].astype(str).str.strip()
+        g.loc[dup, "block"] = g.loc[dup, "block"] + d.where(d.eq(""), " (" + d + ")")
+    dup2 = g["block"].duplicated(keep=False)
+    if dup2.any():
+        g.loc[dup2, "block"] = g.loc[dup2, "block"] + " #" + g.loc[dup2, "block_id"].astype(str)
+    assert not g["block"].duplicated().any(), "block names still not unique"
     return g
 
 

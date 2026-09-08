@@ -33,7 +33,8 @@ import pandas as pd
 from rainfall import gsmap, imd, metrics, blocks as blk
 
 DEFAULT_SHP = ("/Users/mipl/Documents/Agroforestry/South India/Phase 3/"
-               "Stratification/Input_boundary/Blocks/SI_blocks_3rd_phase_updated_6.shp")
+               "Stratification/Input_boundary/Blocks/"
+               "SI_blocks_3rd_phase_updated_7_all_blocks_weather.shp")
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(HERE, "data", "raw_cache")
 IMD_CACHE = os.path.join(HERE, "data", "imd_cache")
@@ -244,7 +245,10 @@ def main():
     print(f"Loaded {len(blocks)} blocks; window bbox = {tuple(round(v,2) for v in bbox)}")
     skip_hist = args.only_current
     if not skip_hist:
-        blocks.to_file(os.path.join(args.out, "blocks.geojson"), driver="GeoJSON")
+        # save a light geometry for the app map/centroids (extraction uses full geom)
+        save = blocks.copy()
+        save["geometry"] = save.geometry.simplify(0.003).make_valid()
+        save.to_file(os.path.join(args.out, "blocks.geojson"), driver="GeoJSON")
 
     # ---- historical (10 yrs): continuous May–Dec ----
     for src in ([] if skip_hist else args.sources):
