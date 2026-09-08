@@ -16,3 +16,6 @@ data/*.log
 
 # stray duplicate folder (not part of the project)
 data copy/
+
+# generated static HTML export (run generate_html.py to produce)
+html_out/

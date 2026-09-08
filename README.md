@@ -126,6 +126,27 @@ rainy-day threshold). Horizon ≈ 16 days. See `rainfall/weathernext.py`.
 > those need GCP auth/billing (BigQuery) or are a web viewer (Weather Lab); Open-Meteo
 > serves the same model with the best fit for a credential-free deployed app.
 
+## 5. Static HTML export (one file per block)
+
+The **same dashboard** can be exported as standalone HTML — one `<id>.html` per
+polygon — for sharing offline or hosting as a static site (no Streamlit server):
+
+```bash
+python generate_html.py                         # all blocks, both sources, 1 mm
+python generate_html.py --threshold 2.5 --sources gsmap
+python generate_html.py --id-col block_id --no-forecast --limit 5   # testing
+```
+
+Writes to `html_out/`: one page per block (GSMaP/IMD source tabs, the two 10-year
+heatmaps, the current-year bars, a live-baked WeatherNext forecast, a location map,
+and the weekly table) plus an `index.html` linking them all. `--id-col` picks the
+shapefile/geojson column used for the filename (default `block`). The app and this
+exporter share the plotting code in `rainfall/figures.py`, so both stay in sync.
+
+Serve locally with `python -m http.server` inside `html_out/`, or publish the folder
+(e.g. GitHub Pages / any static host). The threshold is fixed at generation time
+(static pages have no live slider); re-run to change it.
+
 ## Weeks
 
 Fixed 7-day bins from May 1 (Week 1 = May 1–7, …). The May–Dec season is 245 days
@@ -138,10 +159,12 @@ rainfall_app/
 ├── rainfall/           # library
 │   ├── gsmap.py        #   JAXA FTP access + binary grid parsing
 │   ├── imd.py          #   IMD gridded rainfall via imdlib
-│   ├── weathernext.py  #   WeatherNext forecast via Earth Engine (access-gated)
+│   ├── weathernext.py  #   WeatherNext 2 forecast via Open-Meteo (live)
+│   ├── figures.py      #   Plotly figures shared by app + HTML export
 │   ├── metrics.py      #   weekly binning, thresholds, dry spells
 │   └── blocks.py       #   shapefile loading + polygon→pixel mapping
 ├── build_dataset.py       # offline data-prep pipeline (both sources)
+├── generate_html.py       # static HTML export — one page per block
 ├── app.py                 # Streamlit app (entry point)
 ├── tests/                 # unit tests (pytest)
 ├── data/out/              # baked dataset (committed -- read at runtime)
