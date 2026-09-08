@@ -143,6 +143,8 @@ and the weekly table) plus an `index.html` linking them all. `--id-col` picks th
 shapefile/geojson column used for the filename (default `block`). The app and this
 exporter share the plotting code in `rainfall/figures.py`, so both stay in sync.
 
+Prefer a notebook? **`run_local.ipynb`** drives the whole flow (build data for your shapefile → generate the HTML) with an editable config cell.
+
 Serve locally with `python -m http.server` inside `html_out/`, or publish the folder
 (e.g. GitHub Pages / any static host). The threshold is fixed at generation time
 (static pages have no live slider); re-run to change it.
@@ -165,6 +167,7 @@ rainfall_app/
 │   └── blocks.py       #   shapefile loading + polygon→pixel mapping
 ├── build_dataset.py       # offline data-prep pipeline (both sources)
 ├── generate_html.py       # static HTML export — one page per block
+├── run_local.ipynb        # notebook: build + export for your shapefile
 ├── app.py                 # Streamlit app (entry point)
 ├── tests/                 # unit tests (pytest)
 ├── data/out/              # baked dataset (committed -- read at runtime)

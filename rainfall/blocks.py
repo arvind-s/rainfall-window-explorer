@@ -12,24 +12,33 @@ DISTRICT_COL = "District_x"
 STATE_COL = "State_x"
 
 
-def load_blocks(shp_path: str) -> gpd.GeoDataFrame:
-    """Read blocks, ensure WGS84, add a stable ``block_id`` and clean names."""
+def load_blocks(shp_path: str, block_col: str = BLOCK_COL,
+                district_col: str = DISTRICT_COL, state_col: str = STATE_COL) -> gpd.GeoDataFrame:
+    """Read polygons, ensure WGS84, add a stable ``block_id`` and clean names.
+
+    ``block_col`` names the polygon-name/id field (required). ``district_col`` and
+    ``state_col`` are optional grouping/label fields; when absent they are blank.
+    """
     g = gpd.read_file(shp_path)
+    if block_col not in g.columns:
+        raise ValueError(f"block_col '{block_col}' not in shapefile columns {list(g.columns)}")
     if g.crs is None or g.crs.to_epsg() != 4326:
         g = g.to_crs(4326)
     bad = g.geometry.isna() | g.geometry.is_empty
     if bad.any():
-        names = ", ".join(g.loc[bad, BLOCK_COL].astype(str))
+        names = ", ".join(g.loc[bad, block_col].astype(str))
         print(f"WARNING: dropping {int(bad.sum())} block(s) with no geometry: {names}")
         g = g[~bad]
     g = g.reset_index(drop=True)
     g["block_id"] = g.index.astype(int)
-    g["block"] = g[BLOCK_COL].astype(str).str.strip()
-    g["district"] = g[DISTRICT_COL].astype(str).str.strip()
-    g["state"] = g[STATE_COL].astype(str).str.strip()
-    # disambiguate any duplicate block names by district
+    g["block"] = g[block_col].astype(str).str.strip()
+    g["district"] = g[district_col].astype(str).str.strip() if district_col in g.columns else ""
+    g["state"] = g[state_col].astype(str).str.strip() if state_col in g.columns else ""
+    # disambiguate duplicate block names by district (or by id when no district)
     dup = g["block"].duplicated(keep=False)
-    g.loc[dup, "block"] = g.loc[dup, "block"] + " (" + g.loc[dup, "district"] + ")"
+    if dup.any():
+        suffix = g["district"].where(g["district"].astype(bool), g["block_id"].astype(str))
+        g.loc[dup, "block"] = g.loc[dup, "block"] + " (" + suffix[dup].astype(str) + ")"
     return g
 
 

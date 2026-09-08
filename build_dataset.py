@@ -216,6 +216,9 @@ def main():
                     default=list(range(2016, 2026)))   # 10 years: 2016–2025
     ap.add_argument("--sources", nargs="+", choices=["gsmap", "imd"], default=["gsmap", "imd"])
     ap.add_argument("--shp", default=DEFAULT_SHP)
+    ap.add_argument("--block-col", default=blk.BLOCK_COL, help="polygon name/id column")
+    ap.add_argument("--district-col", default=blk.DISTRICT_COL, help="optional district column")
+    ap.add_argument("--state-col", default=blk.STATE_COL, help="optional state column")
     ap.add_argument("--max-days", type=int, default=None)
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--current-year", type=int, default=date.today().year,
@@ -236,7 +239,7 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     os.makedirs(IMD_CACHE, exist_ok=True)
     os.makedirs(IMD_RT_CACHE, exist_ok=True)
-    blocks = blk.load_blocks(args.shp)
+    blocks = blk.load_blocks(args.shp, args.block_col, args.district_col, args.state_col)
     bbox = blk.season_bbox(blocks)
     print(f"Loaded {len(blocks)} blocks; window bbox = {tuple(round(v,2) for v in bbox)}")
     skip_hist = args.only_current
