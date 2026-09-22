@@ -119,6 +119,30 @@ def weekly_current(key, rainy_mm):
     return metrics.weekly_by_year(daily, start_month=5, rainy_mm=rainy_mm)
 
 
+@st.cache_data(show_spinner=False)
+def same_period_avg(key, rainy_mm, month, day):
+    """Per-block 10-yr average rainy-days & rainfall over the *same window* each
+    historical year: May 1 → (``month``, ``day``). Lets 'this year so far' be read
+    against a like-for-like normal. Returns a block-indexed DataFrame or None."""
+    daily = load_daily(key, "")
+    if daily is None or daily.empty:
+        return None
+    d = daily[["block", "date", "rain_mm"]].copy()
+    dt = pd.to_datetime(d["date"])
+    d["yr"] = dt.dt.year
+    # May 1 → (month, day) inclusive, within each year
+    keep = (dt.dt.month < month) | ((dt.dt.month == month) & (dt.dt.day <= day))
+    d = d[keep]
+    per_yr = d.groupby(["block", "yr"]).agg(
+        rainy_days=("rain_mm", lambda s: int((s > rainy_mm).sum())),
+        total_mm=("rain_mm", "sum")).reset_index()
+    avg = per_yr.groupby("block").agg(
+        avg_rainy=("rainy_days", "mean"),
+        avg_mm=("total_mm", "mean"),
+        n_years=("yr", "nunique")).reset_index()
+    return avg.set_index("block")
+
+
 # --------------------------------------------------------------------------
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -235,11 +259,28 @@ with tab_now:
         last = pd.to_datetime(dcb["date"]).max()
         st.markdown(f"##### This year: {cy} so far — actual rainfall (May onward)")
         st.caption(f"This season so far, {src_label} · May 1 through {last:%d %b %Y}. "
-                   "Single year (not an average) — the rain that has actually fallen.")
+                   "Single year (not an average) — the rain that has actually fallen, "
+                   "shown against the 10-yr average for the same May 1 → date window.")
+        cur_rainy = cb["rainy_days"].sum()
+        cur_mm = cb["total_mm"].sum()
+        avg_tbl = same_period_avg(src["key"], rainy_mm, last.month, last.day)
+        a = avg_tbl.loc[block] if (avg_tbl is not None and block in avg_tbl.index) else None
         cc1, cc2, cc3 = st.columns(3)
-        cc1.metric("Rainy days so far", f"{cb['rainy_days'].sum():.0f}",
-                   help=f"Days >{rainy_mm:g}mm, May 1 → latest available")
-        cc2.metric("Rainfall so far", f"{cb['total_mm'].sum():.0f} mm")
+        if a is not None:
+            cc1.metric("Rainy days so far", f"{cur_rainy:.0f}",
+                       delta=f"10-yr avg {a['avg_rainy']:.0f}  ({cur_rainy - a['avg_rainy']:+.0f})",
+                       delta_color="off",
+                       help=f"Days >{rainy_mm:g}mm, May 1 → {last:%d %b}. Delta = 10-yr "
+                            f"(2016–2025) average for the same window, and this year minus that.")
+            cc2.metric("Rainfall so far", f"{cur_mm:.0f} mm",
+                       delta=f"10-yr avg {a['avg_mm']:.0f}  ({cur_mm - a['avg_mm']:+.0f})",
+                       delta_color="off",
+                       help=f"Total rainfall May 1 → {last:%d %b}. Delta = 10-yr (2016–2025) "
+                            f"average for the same window, and this year minus that.")
+        else:
+            cc1.metric("Rainy days so far", f"{cur_rainy:.0f}",
+                       help=f"Days >{rainy_mm:g}mm, May 1 → latest available")
+            cc2.metric("Rainfall so far", f"{cur_mm:.0f} mm")
         cc3.metric("Wettest week",
                    metrics.week_label(int(cb.loc[cb['rainy_days'].idxmax(), 'week']),
                                       start_month=5, end_month=12) if len(cb) else "–")
