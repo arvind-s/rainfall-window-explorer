@@ -75,9 +75,26 @@ def year_bars(wby_block, value_col, color, unit, val_fmt, title, sm=5, em=12):
 
 
 def forecast_bars(fb):
-    """WeatherNext forecast: ensemble-mean bars + p10–p90 whiskers + chance of rain."""
+    """WeatherNext forecast: ensemble-mean bars + p10–p90 whiskers + chance of rain.
+
+    A frame with only date/rain_mm (WeatherNext 3 ensemble mean) gets plain bars.
+    """
     labels = [d.strftime("%d %b") for d in fb["date"].dt.date]
     vals = fb["rain_mm"].round(1).tolist()
+    if "p10" not in fb:
+        fig = go.Figure(go.Bar(
+            x=labels, y=vals, marker_color="#7c3aed", marker_line_width=0,
+            text=[f"{v:.0f}" for v in vals], textposition="outside",
+            textfont=dict(color=INK, size=11),
+            hovertemplate="<b>%{x}</b><br>%{y:.1f} mm ensemble mean<extra></extra>"))
+        fig.update_traces(marker_cornerradius=3)
+        fig.update_layout(title="Daily rainfall forecast — ensemble mean (mm)",
+                          font=PLOT_FONT, height=360, margin=dict(t=52, b=50, l=8, r=8),
+                          bargap=0.3, paper_bgcolor="white", plot_bgcolor="white",
+                          yaxis=dict(title="mm", showgrid=True, gridcolor="#eef2f7",
+                                     zeroline=False, tickfont=dict(color=MUTED)),
+                          xaxis=dict(tickangle=-45, showgrid=False, tickfont=dict(color=INK, size=11)))
+        return fig
     prob = fb["prob_rain"].round(0).tolist()
     up = (fb["p90"] - fb["rain_mm"]).clip(lower=0).round(1).tolist()
     dn = (fb["rain_mm"] - fb["p10"]).clip(lower=0).round(1).tolist()

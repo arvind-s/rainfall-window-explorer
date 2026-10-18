@@ -87,6 +87,13 @@ def fetch_forecast(lat, lon, rainy_mm):
 
 
 @st.cache_data(show_spinner=False)
+def load_wn3():
+    """Baked WeatherNext 3 daily block forecast (scripts/wn3_forecast.py), or None."""
+    path = os.path.join(OUT, "forecast_wn3.parquet")
+    return pd.read_parquet(path) if os.path.exists(path) else None
+
+
+@st.cache_data(show_spinner=False)
 def load_daily(key, suffix):
     """Daily block rainfall table for daily{suffix}_{key}.parquet, or None.
 
@@ -294,32 +301,56 @@ with tab_now:
             use_container_width=True, config={"displayModeBar": False})
 
 with tab_fc:
-    st.markdown("##### Rainfall forecast &nbsp;·&nbsp; WeatherNext 2 (Google DeepMind)")
-    cen = blocks_geo[blocks_geo["block"] == block].geometry.centroid
-    lat, lon = float(cen.y.iloc[0]), float(cen.x.iloc[0])
-    fb = fetch_forecast(lat, lon, rainy_mm)
-    if fb is not None:
-        fb = fb[fb["rain_mm"].notna()].reset_index(drop=True)
-    if fb is None or fb.empty:
-        st.warning("Couldn't reach the WeatherNext forecast service just now. "
-                   "It's a free live API (Open-Meteo) — try again in a moment.")
-    else:
-        horizon = len(fb)
-        st.caption(f"WeatherNext 2 ensemble ({int(fb['n_members'].iloc[0])} members) via Open-Meteo · "
-                   f"next {horizon} days from {fb['date'].min():%d %b} · block centroid "
-                   f"{lat:.2f}, {lon:.2f}. Live forecast — updates through the day.")
-        rainy_ahead = int((fb["rain_mm"] > rainy_mm).sum())
-        g1, g2, g3 = st.columns(3)
-        g1.metric("Forecast rainfall", f"{fb['rain_mm'].sum():.0f} mm",
-                  help=f"Ensemble-mean total over the next {horizon} days")
-        g2.metric("Rainy days ahead", f"{rainy_ahead}",
-                  help=f"Days with mean rainfall >{rainy_mm:g}mm")
-        g3.metric("Wettest day", f"{pd.to_datetime(fb.loc[fb['rain_mm'].idxmax(), 'date']):%d %b}")
+    wn3 = load_wn3()
+    w3 = None if wn3 is None else wn3[(wn3["block"] == block) & (wn3["hours"] >= 20)].sort_values("date")
+    fc_src = "WeatherNext 2 (live)"
+    if w3 is not None and not w3.empty:
+        fc_src = st.segmented_control("Forecast model", ["WeatherNext 3", "WeatherNext 2 (live)"],
+                                      default="WeatherNext 3", key="fc_src") or "WeatherNext 3"
 
-        st.plotly_chart(forecast_bars(fb), use_container_width=True,
+    if fc_src == "WeatherNext 3":
+        w3 = w3.reset_index(drop=True)
+        st.markdown("##### Rainfall forecast &nbsp;·&nbsp; WeatherNext 3 (Google DeepMind)")
+        st.caption(f"WeatherNext 3 ensemble mean · 0.1° (~11 km), averaged over the grid cells in the block · "
+                   f"run {w3['run_utc'].iloc[0]} UTC · next {len(w3)} days from {w3['date'].min():%d %b} "
+                   "(IST days). Baked into the app — refreshed when the data is rebuilt.")
+        g1, g2, g3 = st.columns(3)
+        g1.metric("Forecast rainfall", f"{w3['rain_mm'].sum():.0f} mm",
+                  help=f"Ensemble-mean total over the next {len(w3)} days")
+        g2.metric("Rainy days ahead", f"{int((w3['rain_mm'] > rainy_mm).sum())}",
+                  help=f"Days with mean rainfall >{rainy_mm:g}mm")
+        g3.metric("Wettest day", f"{pd.to_datetime(w3.loc[w3['rain_mm'].idxmax(), 'date']):%d %b}")
+        st.plotly_chart(forecast_bars(w3[["date", "rain_mm"]]), use_container_width=True,
                         config={"displayModeBar": False})
-        st.caption("Bar = 64-member ensemble mean; whiskers = p10–p90 spread (forecast "
-                   "confidence); hover for each day's chance of rain. Model output — guidance, not certainty.")
+        st.caption("Bar = 64-member ensemble-mean daily rainfall (sum of hourly ensemble means). "
+                   "Model output — guidance, not certainty.")
+    else:
+        st.markdown("##### Rainfall forecast &nbsp;·&nbsp; WeatherNext 2 (Google DeepMind)")
+        cen = blocks_geo[blocks_geo["block"] == block].geometry.centroid
+        lat, lon = float(cen.y.iloc[0]), float(cen.x.iloc[0])
+        fb = fetch_forecast(lat, lon, rainy_mm)
+        if fb is not None:
+            fb = fb[fb["rain_mm"].notna()].reset_index(drop=True)
+        if fb is None or fb.empty:
+            st.warning("Couldn't reach the WeatherNext forecast service just now. "
+                       "It's a free live API (Open-Meteo) — try again in a moment.")
+        else:
+            horizon = len(fb)
+            st.caption(f"WeatherNext 2 ensemble ({int(fb['n_members'].iloc[0])} members) via Open-Meteo · "
+                       f"next {horizon} days from {fb['date'].min():%d %b} · block centroid "
+                       f"{lat:.2f}, {lon:.2f}. Live forecast — updates through the day.")
+            rainy_ahead = int((fb["rain_mm"] > rainy_mm).sum())
+            g1, g2, g3 = st.columns(3)
+            g1.metric("Forecast rainfall", f"{fb['rain_mm'].sum():.0f} mm",
+                      help=f"Ensemble-mean total over the next {horizon} days")
+            g2.metric("Rainy days ahead", f"{rainy_ahead}",
+                      help=f"Days with mean rainfall >{rainy_mm:g}mm")
+            g3.metric("Wettest day", f"{pd.to_datetime(fb.loc[fb['rain_mm'].idxmax(), 'date']):%d %b}")
+
+            st.plotly_chart(forecast_bars(fb), use_container_width=True,
+                            config={"displayModeBar": False})
+            st.caption("Bar = 64-member ensemble mean; whiskers = p10–p90 spread (forecast "
+                       "confidence); hover for each day's chance of rain. Model output — guidance, not certainty.")
 
 with tab_rain:
     st.markdown("##### Cumulative rainfall per week &nbsp;·&nbsp; total mm")
